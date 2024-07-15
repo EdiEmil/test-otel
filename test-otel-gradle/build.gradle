@@ -1,0 +1,80 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'de.undercouch.download' version '4.1.2'
+    id("com.github.johnrengelman.shadow") version "8.1.1"
+}
+
+group = 'com.ignite'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+application {
+    mainClassName = 'com.ignite.Main'  // Replace with your actual main class name
+}
+
+shadowJar {
+    archiveBaseName.set('TestOtelShadowJar')
+    archiveVersion.set('1.0')
+    archiveClassifier.set('')
+
+    manifest {
+        attributes(
+                'Main-Class': 'com.ignite.Main'
+        )
+    }
+}
+
+dependencies {
+    //testImplementation platform('org.junit:junit-bom:5.9.1')
+    //testImplementation 'org.junit.jupiter:junit-jupiter'
+    //implementation 'io.opentelemetry:opentelemetry-api:1.17.0'
+    //implementation 'io.opentelemetry:opentelemetry-sdk:1.17.0'
+   // implementation 'io.opentelemetry:opentelemetry-sdk-metrics:1.17.0-alpha'
+   // implementation 'io.opentelemetry:opentelemetry-exporter-otlp:1.17.0'
+   // implementation 'io.opentelemetry:opentelemetry-sdk-extension-autoconfigure:1.17.0-alpha'
+   // implementation 'io.opentelemetry:opentelemetry-sdk-extension-autoconfigure-spi:1.17.0-alpha'
+    //implementation 'io.opentelemetry:opentelemetry-sdk-extension-resources:1.17.0-alpha'
+   // implementation 'io.opentelemetry:opentelemetry-semconv:1.17.0-alpha'  // Add this line for ResourceAttributes
+//    implementation group: 'io.opentelemetry', name: 'opentelemetry-exporter-otlp', version: '1.28.0'
+  //  runtimeOnly group: 'io.opentelemetry', name: 'opentelemetry-semconv', version: '1.17.0-alpha'
+//    implementation group: 'io.opentelemetry', name: 'opentelemetry-sdk-extension-metric-incubator', version: '1.17.0-alpha'
+//    implementation group: 'io.opentelemetry', name: 'opentelemetry-sdk', version: '1.28.0'
+    implementation group: 'io.opentelemetry', name: 'opentelemetry-api', version: '1.39.0'
+    implementation group: 'io.opentelemetry', name: 'opentelemetry-sdk', version: '1.39.0'
+    implementation group: 'io.opentelemetry', name: 'opentelemetry-exporter-otlp', version: '1.39.0'
+    implementation group: 'io.opentelemetry', name: 'opentelemetry-sdk-metrics', version: '1.36.0'
+    implementation 'com.sparkjava:spark-core:2.9.3'
+    runtimeOnly 'io.opentelemetry:opentelemetry-semconv:1.28.0-alpha'
+
+
+
+
+
+}
+
+//task downloadOpenTelemetryAgent(type: de.undercouch.gradle.tasks.download.Download) {
+//    src 'https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v1.10.0/opentelemetry-javaagent.jar'
+//    dest "$buildDir/opentelemetry-javaagent.jar"
+//    onlyIfNewer true
+//}
+
+
+//build.dependsOn downloadOpenTelemetryAgent
+
+//tasks.withType(JavaExec) {
+//    jvmArgs += "-javaagent:${buildDir}/opentelemetry-javaagent.jar"
+//}
+
+
+
+repositories {
+    mavenCentral() // This includes Maven Central repository
+    // You can also add other repositories if needed
+    maven {
+        url 'https://repo.maven.apache.org/maven2'
+    }
+}
