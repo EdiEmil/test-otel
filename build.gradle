@@ -1,0 +1,173 @@
+plugins {
+  id 'com.google.cloud.tools.jib' version '3.4.2'
+  id 'com.github.johnrengelman.shadow' version '7.1.2'
+}
+
+repositories {
+  mavenCentral()
+  flatDir {
+    dirs( "lib" )
+  }
+}
+
+
+dependencies {
+  implementation 'org.apache.ignite:ignite-core:2.16.0'
+  implementation 'org.apache.ignite:ignite-spring:2.16.0'
+  implementation 'org.apache.logging.log4j:log4j-api:2.22.1'
+  implementation 'org.apache.logging.log4j:log4j-core:2.22.1'
+  implementation 'org.jctools:jctools-core:4.0.1'                       //<<-- legacy, no modules declared
+  implementation 'org.agrona:agrona:1.16.0'
+  implementation(":phoenixcommon:1.0.0")
+  implementation(":threadly-release-5.43-UnsafeRemoved:")
+  testImplementation 'junit:junit:4.13.2'
+  api 'com.amazon.ion:ion-java:1.10.2'
+  api 'io.undertow:undertow-core:2.1.0.Final'
+  api 'io.undertow:undertow-servlet:2.1.0.Final'
+  api 'io.undertow:undertow-websockets-jsr:2.1.0.Final'
+  api 'com.google.code.gson:gson:2.10.1'
+
+  implementation group: 'io.opentelemetry', name: 'opentelemetry-api', version: '1.39.0'
+  implementation group: 'io.opentelemetry', name: 'opentelemetry-sdk', version: '1.39.0'
+  implementation group: 'io.opentelemetry', name: 'opentelemetry-exporter-otlp', version: '1.39.0'
+  implementation group: 'io.opentelemetry', name: 'opentelemetry-sdk-metrics', version: '1.36.0'
+}
+
+//task downloadOpenTelemetryAgent(type: Download){
+//  src 'https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v1.10.0/opentelemetry-javaagent.jar'
+//  dest "$buldDir/opentelemetry-javaagent.jar"
+//  onlyIfNewer true
+//}
+
+clean {
+  delete exportDir
+}
+
+shadowJar {
+  archiveBaseName.set('PhoenixPodmanShadowJar')
+  archiveVersion.set('1.0')
+  archiveClassifier.set('')
+
+  manifest {
+    attributes(
+            'Main-Class': 'com.clarifi.phoenix.ashes.server.ServerApp'
+    )
+  }
+}
+
+jar {
+  from sourceSets.main.output
+  manifest { attributes manifestAttributes + [ 'Main-Class' : 'com.clarifi.phoenix.ashes.node.PersistentNode' ] }
+}
+
+
+task testJar( type: Jar ) {
+  archiveClassifier = 'tests'
+  from sourceSets.test.output
+  manifest { attributes manifestAttributes }
+}
+
+task testsourcesJar( type: Jar ) {
+  archiveClassifier = 'testsources'
+  from sourceSets.test.allJava + sourceSets.test.resources
+  manifest { attributes manifestAttributes }
+}
+
+build {
+  artifacts { // jars generated when build task is triggered
+    archives jar, testJar, sourcesJar, testsourcesJar, javadocJar
+  }
+}
+
+jib {
+ // allowInsecureRegistries = true  // when pushing to localhost which has no SSL
+  containerizingMode = 'packaged' // to allow app code in jar instead of plain filesystem
+  from {
+//    image = 'adoptopenjdk/openjdk11:jdk-11.0.19_7'
+    image = 'amazoncorretto:11.0.21-al2'
+  }
+  to {
+    image = 'docker.clarifi.com:5000/com.clarifi.phoenix/phoenix_client'
+//    auth {
+//      username System.env[ 'DOCKER_USERNAME' ]
+//      password System.env[ 'DOCKER_PASSWORD' ]
+//    }
+  }
+  container {
+    jvmFlags = [ '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5006' ] // set suspend=y to wait
+    mainClass = 'com.clarifi.phoenix.ashes.node.HelloWorld'
+    args = [ 'some', 'args' ]
+    ports = [ '5006' ] // 5006 -- debugger port, see jvmFlags above
+//    ports = [ '1000', '2000-2003/udp' ]
+//    labels = [ key1 : 'value1', key2 : 'value2' ]
+//      environment = [
+//            'VERSION': version
+//            'DATA_DIR': '/data',
+//            'APPLICATION_PORT' : '80',
+//            'DEVELOPMENT_MODE' : 'false'
+//      ]
+    creationTime = new Date().format( "yyyy-MM-dd'T'HH:mm:ssZ" )
+    format = 'OCI' //'Docker'
+//    extraDirectories {
+//      paths{
+//        path {// copies 'dir' from a project root to denerated image into '/image_dir'
+//          from = rootProject.file( 'dir' )
+//          into = '/image_dir'
+//        }
+//      }
+//    }
+  }
+}
+
+task deleteImage( type: Exec ) {
+  doFirst {
+    exec {
+      executable 'podman'
+      args 'rm', '-f', rootProject.name
+      ignoreExitValue = true
+      errorOutput { null }
+    }
+  }
+  executable 'podman'
+  args 'rmi', '-f', jib.to.image
+}
+
+task startContainer( type: Exec ) {
+//DP: prerequisite: start cluster by running shell script:
+//DP:  ---> on windows: cluster_in_a_pod.cmd
+//DP:  ---> on linux:   cluster_in_a_pod.sh
+  executable 'podman'
+  args 'run', '-d', '--pod', 'ignite', '--name', rootProject.name,
+       '-v', "${rootProject.projectDir}/conf:/conf:z",
+       '-e', 'CONFIG_URI=/conf/example-ignite.xml',
+       jib.to.image
+}
+
+task deployImage( type: Exec ) {
+  dependsOn deleteImage
+  executable 'podman'
+  args 'load', '-i', project.file( 'build/jib-image.tar' )
+}
+
+jibBuildTar {
+  finalizedBy deployImage           //DP: uncomment if you want generate and deploy
+}
+
+jibDockerBuild {
+  dependsOn deleteImage             //DP: uncomment if you want generate and deploy
+}
+
+task buildAndDeploy( type: GradleBuild ) {
+  tasks = [ 'assemble', 'jibDockerBuild', 'startContainer' ]
+}
+
+task rebuildAndDeploy( type: GradleBuild ) {
+  tasks = [ 'clean', 'buildAndDeploy' ]
+}
+
+repositories {
+  mavenCentral()
+  maven {
+    url 'https://repo.maven.apache.org/maven2'
+  }
+}
