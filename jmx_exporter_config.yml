@@ -1,0 +1,4 @@
+host_port: 0.0.0.0:9404
+#localhost: 1099
+rules:
+- pattern: ".*"
